@@ -1,0 +1,187 @@
+{
+ "baseline": 1099444404223,
+ "events": [
+  {
+   "t": 1.87,
+   "kind": "down",
+   "pairs": [
+    "PA2->PA13"
+   ]
+  },
+  {
+   "t": 2.37,
+   "kind": "up",
+   "pairs": [
+    "PA2->PA13"
+   ]
+  },
+  {
+   "t": 2.87,
+   "kind": "down",
+   "pairs": [
+    "PA2->PA11"
+   ]
+  },
+  {
+   "t": 3.37,
+   "kind": "up",
+   "pairs": [
+    "PA2->PA11"
+   ]
+  },
+  {
+   "t": 3.87,
+   "kind": "down",
+   "pairs": [
+    "PA2->PA10"
+   ]
+  },
+  {
+   "t": 4.2,
+   "kind": "up",
+   "pairs": [
+    "PA2->PA10"
+   ]
+  },
+  {
+   "t": 4.7,
+   "kind": "down",
+   "pairs": [
+    "PA2->PA7"
+   ]
+  },
+  {
+   "t": 5.2,
+   "kind": "up",
+   "pairs": [
+    "PA2->PA7"
+   ]
+  },
+  {
+   "t": 5.7,
+   "kind": "down",
+   "pairs": [
+    "PA2->PA8"
+   ]
+  },
+  {
+   "t": 6.2,
+   "kind": "up",
+   "pairs": [
+    "PA2->PA8"
+   ]
+  },
+  {
+   "t": 6.54,
+   "kind": "down",
+   "pairs": [
+    "PA2->PA9"
+   ]
+  },
+  {
+   "t": 7.03,
+   "kind": "up",
+   "pairs": [
+    "PA2->PA9"
+   ]
+  },
+  {
+   "t": 7.54,
+   "kind": "down",
+   "pairs": [
+    "PA2->PB9"
+   ]
+  },
+  {
+   "t": 8.03,
+   "kind": "up",
+   "pairs": [
+    "PA2->PB9"
+   ]
+  },
+  {
+   "t": 8.37,
+   "kind": "down",
+   "pairs": [
+    "PA2->PB8"
+   ]
+  },
+  {
+   "t": 8.87,
+   "kind": "up",
+   "pairs": [
+    "PA2->PB8"
+   ]
+  },
+  {
+   "t": 9.37,
+   "kind": "down",
+   "pairs": [
+    "PA2->PB17"
+   ]
+  },
+  {
+   "t": 9.7,
+   "kind": "up",
+   "pairs": [
+    "PA2->PB17"
+   ]
+  },
+  {
+   "t": 10.2,
+   "kind": "down",
+   "pairs": [
+    "PA2->PB16"
+   ]
+  },
+  {
+   "t": 10.7,
+   "kind": "up",
+   "pairs": [
+    "PA2->PB16"
+   ]
+  },
+  {
+   "t": 11.2,
+   "kind": "down",
+   "pairs": [
+    "PA2->PB15"
+   ]
+  },
+  {
+   "t": 11.53,
+   "kind": "up",
+   "pairs": [
+    "PA2->PB15"
+   ]
+  },
+  {
+   "t": 12.03,
+   "kind": "down",
+   "pairs": [
+    "PA2->PB14"
+   ]
+  },
+  {
+   "t": 12.53,
+   "kind": "up",
+   "pairs": [
+    "PA2->PB14"
+   ]
+  },
+  {
+   "t": 12.86,
+   "kind": "down",
+   "pairs": [
+    "PA2->PB7"
+   ]
+  },
+  {
+   "t": 13.36,
+   "kind": "up",
+   "pairs": [
+    "PA2->PB7"
+   ]
+  }
+ ]
+}

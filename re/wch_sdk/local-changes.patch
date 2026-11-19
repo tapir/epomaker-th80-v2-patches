@@ -1,0 +1,34 @@
+diff --git a/EVT/EXAM/SRC/RVMSIS/core_riscv.h b/EVT/EXAM/SRC/RVMSIS/core_riscv.h
+index a5b14d1..ee269b0 100644
+--- a/EVT/EXAM/SRC/RVMSIS/core_riscv.h
++++ b/EVT/EXAM/SRC/RVMSIS/core_riscv.h
+@@ -642,8 +642,9 @@ __attribute__((always_inline)) RV_STATIC_INLINE uint32_t __get_SP(void)
+  */
+ __attribute__((always_inline)) RV_STATIC_INLINE void __MCPY(void *dst, void *start, void *end)
+ {
+-    __asm volatile("mcpy %2, %0, %1" : \
+-                   "+r"(start), "+r"(dst) : "r"(end) : "memory");
++    /* xPack GCC has no WCH `mcpy` instruction. */
++    { uint8_t *d = (uint8_t *)dst; uint8_t *s = (uint8_t *)start;
++      while (s < (uint8_t *)end) *d++ = *s++; }
+ }
+ 
+ #define SysTick_SR_SWIE             (1 << 31)
+diff --git a/EVT/EXAM/SRC/StdPeriphDriver/CH58x_usbdev.c b/EVT/EXAM/SRC/StdPeriphDriver/CH58x_usbdev.c
+index 3639883..2cea5db 100644
+--- a/EVT/EXAM/SRC/StdPeriphDriver/CH58x_usbdev.c
++++ b/EVT/EXAM/SRC/StdPeriphDriver/CH58x_usbdev.c
+@@ -39,9 +39,10 @@ void USB_DeviceInit(void)
+     R32_UEP3_DMA = (uint32_t)pEP3_RAM_Addr;
+ 
+     R8_UEP0_CTRL = UEP_R_RES_ACK | UEP_T_RES_NAK;
+-    R8_UEP1_CTRL = UEP_R_RES_ACK | UEP_T_RES_NAK | RB_UEP_AUTO_TOG;
+-    R8_UEP2_CTRL = UEP_R_RES_ACK | UEP_T_RES_NAK | RB_UEP_AUTO_TOG;
+-    R8_UEP3_CTRL = UEP_R_RES_ACK | UEP_T_RES_NAK | RB_UEP_AUTO_TOG;
++    /* No AUTO_TOG: the scanner's ISR toggles DATA0/1 itself; both together double-toggle. */
++    R8_UEP1_CTRL = UEP_R_RES_ACK | UEP_T_RES_NAK;
++    R8_UEP2_CTRL = UEP_R_RES_ACK | UEP_T_RES_NAK;
++    R8_UEP3_CTRL = UEP_R_RES_ACK | UEP_T_RES_NAK;
+     R8_UEP4_CTRL = UEP_R_RES_ACK | UEP_T_RES_NAK;
+ 
+     R8_USB_DEV_AD = 0x00;
