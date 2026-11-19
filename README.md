@@ -13,8 +13,8 @@ Working with `patch/build/th80.bin`:
 
 - All 79 keys in the TH80 layout. Left Win acts as Fn and the key right of R-Alt as Win
   (swapped by choice).
-- Knob: clockwise / counter-clockwise = Volume Up / Down, press = Mute. They are keymap
-  slots, so they remap like keys.
+- Knob: clockwise / counter-clockwise = Volume Up / Down, press = Mute, over USB, 2.4G and
+  BT. They are keymap slots, so they remap like keys.
 - Mode switch: USB / 2.4G (stock dongle) / BT. Fn+1/2/3 picks the BT device.
 - Win/Mac switch: sets the firmware's OS mode.
 - Debounce 5 ms by default.
@@ -108,7 +108,7 @@ USB while plugged in, so Sharkfin and the tools still reach it.
 - Remove Fn+Esc (factory reset) from the Fn layers once the defaults stop changing.
 - Sleep: the knob and Win/Mac pull-ups stay on in sleep (extra drain while a contact is
   closed); release or drive them low before sleep.
-- Untested: the knob over BT, BT pairing (long press Fn+1/2/3).
+- Untested: pairing a new BT host (long press Fn+1/2/3).
 - USB product string still says "CK75SE Gaming Keyboard".
 - Final test: every key, the knob and the switches in USB / 2.4G / BT; battery level;
   sleep and wake.
