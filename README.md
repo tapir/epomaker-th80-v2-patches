@@ -32,8 +32,7 @@ Tested over USB, 2.4G and BT with `patch/build/th80.bin`:
 The Fn layers hold only Fn+1/2/3 and Fn+Esc (factory reset); everything else is meant to
 be mapped in Sharkfin.
 
-Limits: the 2.4G dongle reports its own USB name, and the middle LED of the strip stays
-dark (the CK75SE has no third indicator).
+Limits: None known.
 
 ## Build
 
@@ -84,18 +83,6 @@ USB while plugged in, so Sharkfin and the tools still reach it.
 | `tools/flash_scanner.py` | flash the pin scanner |
 | `tools/scanner_cmd.py` | pin-scanner commands: status, battery ADC, LED tests, enter boot |
 | `tools/capture_pins.py` | log pin-scanner key and pin events |
-
-## Layout
-
-| | |
-|---|---|
-| `firmware/3720_v107.bin` | the CK75SE vendor image the patches apply to |
-| `patch/` | patch list, hooks, build tool, `build/th80.bin` |
-| `re/FINDINGS.md` | hardware, protocols and firmware internals |
-| `re/scanner/` | bare-metal pin scanner used to map the TH80's pins |
-| `re/wch_sdk/` | the part of WCH's `openwch/ch585` SDK the scanner builds from |
-| `captures/` | raw scanner captures behind the pin map |
-| `evidence/` | FCC internal photos, MCU marking photos |
 
 ## Hardware
 
