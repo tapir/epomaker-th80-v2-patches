@@ -25,10 +25,11 @@ rewritten).
 | debounce | default settings `0x3D080` + 9: 1 → 5 ms |
 | mode switch | the 20 PB1/PB2 pin arguments → PB20/PB21 |
 | device id | identify reply `0x19D8E`/`0x19D94`: 3720 → 3573 (Sharkfin's TH80 V2 profile) |
+| sleep | the sleep preparation's tail call `0x14562` → `hook_sleep` (`hooks/knob.c`): closed knob, Win/Mac and mode-switch contacts get pull-downs instead of pull-ups for the sleep |
 | names | USB product string `0x3B15C` in place; the BLE name copy at `0xC8C8` loads `hook_ble_name` (`hooks/names.c`) with its length: "EPOMAKER TH80 V2" |
 | Esc + L recovery | `0x1BE4C` → `hook_call` (`hooks/hook_call.c`): Esc + L held at power-up calls the stock enter-boot routine |
 | knob, Win/Mac | the 4 scan-tick calls of `0x199E8` → `hook_tick` (`hooks/knob.c`): decodes the knob into `key_event()` presses of the knob slots, sets the OS mode from PB1 |
-| lighting colours | commands `0x07`/`0x87`/`0x08`/`0x88` → `hook_led_set`/`_get`, `hook_sled_set`/`_get` (`hooks/led.c`): swap colour modes 7 and 8 for Sharkfin's TH80 V2 profile; an `0x08` mode byte with bit 7 set selects a side-LED test pattern instead (`tools/side_test.py`) |
+| lighting colours | commands `0x07`/`0x87`/`0x08`/`0x88` → `hook_led_set`/`_get`, `hook_sled_set`/`_get` (`hooks/led.c`): swap colour modes 7 and 8 for Sharkfin's TH80 V2 profile |
 | LED chain, side lights | the DMA send `0x1422C` → `hook_led_send` (`hooks/led_send.S`, `hooks/led.c`): turns the 87-LED CK75SE frame into the TH80's 116-LED chain and draws the side lights from the `0x08` settings |
 
 ## A patch

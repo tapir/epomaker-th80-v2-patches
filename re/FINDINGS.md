@@ -79,9 +79,8 @@ Outputs and sensing:
 | 79–81 | top-left strip, top to bottom |
 | 82–115 | side lights, 34 on both sides |
 
-Nothing lights from 116 on. The side order isn't mapped: it jumps between the sides (left
-from the middle toward the back, part of the right, the rest of the left, the rest of the
-right).
+Nothing lights from 116 on. A snake drawn along the side LEDs in chain order runs
+cleanly.
 
 ### CH584M GPIO registers (base `0x40001000`)
 
@@ -208,7 +207,11 @@ arguments.
 - Runtime poll `0x714E` (RAM code, slow tick): switches after 25 disagreeing polls.
 - The mode-key handler `0x9706` (type `0x0E`) acts only with the switch in the matching
   position.
-- Init `0x142D6` makes PB0/PB1/PB2/PB18 pull-up inputs; before sleep it drives PB1/PB2 low.
+- Init `0x142D6` makes PB0/PB1/PB2/PB18 pull-up inputs.
+- Sleep preparation `0x143BE` (called at `0x762A`, `0xD114`, `0x1BD9E`): sets up the matrix
+  for wake on a key press, drives PB1/PB2 low, switches the LED power off, makes PB3, PB4,
+  PB5, PB12, PB13 and PB20–23 pull-up inputs, then tail-calls `0x1ACBE` (clear key reports).
+  After wake, `0x14566` restores PB1/PB2, PB0, PB18 and the matrix.
 
 ### Lighting
 

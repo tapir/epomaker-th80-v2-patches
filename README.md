@@ -20,6 +20,7 @@ Working with `patch/build/th80.bin`:
 - Name: "EPOMAKER TH80 V2" over USB and in Bluetooth pairing lists.
 - Win/Mac switch: sets the firmware's OS mode.
 - Debounce 5 ms by default.
+- Sleep: closed knob, Win/Mac and mode-switch contacts draw no current while asleep.
 - Lighting in the TH80's LED order: every effect, the battery display, Caps Lock (top LED
   of the strip by Esc) and charging (bottom LED of the strip).
 - Side lights (34 LEDs): off, static, breathing, spectrum, wave and snake, with colour,
@@ -77,7 +78,6 @@ USB while plugged in, so Sharkfin and the tools still reach it.
 | `tools/key_capture.py [s]` | print what the keyboard sends, over USB and the 2.4G dongle |
 | `tools/fetch_vendor_fw.py [ID]` | download a vendor image from the ROYUAN OTA server (default 3720) |
 | `tools/get_toolchain.sh` | install the toolchain into `toolchain/` |
-| `tools/side_test.py` | light chosen side LEDs, to map their positions |
 | `tools/flash_scanner.py` | flash the pin scanner |
 | `tools/scanner_cmd.py` | pin-scanner commands: status, battery ADC, LED tests, enter boot |
 | `tools/capture_pins.py` | log pin-scanner key and pin events |
@@ -104,10 +104,5 @@ USB while plugged in, so Sharkfin and the tools still reach it.
 
 ## TODO
 
-- Side lights: wave and snake run in wiring order, which jumps between the sides. Map the
-  physical order with `tools/side_test.py` and fill `SIDE_POS` in `patch/hooks/led.c`.
-- Remove Fn+Esc (factory reset) from the Fn layers once the defaults stop changing.
-- Sleep: the knob and Win/Mac pull-ups stay on in sleep (extra drain while a contact is
-  closed); release or drive them low before sleep.
 - Final test: every key, the knob and the switches in USB / 2.4G / BT; battery level;
   sleep and wake.

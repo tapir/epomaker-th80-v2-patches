@@ -14,6 +14,7 @@
 #define KNOB_A (1u << 3)  /* PB3, changes first when turning clockwise */
 #define KNOB_P (1u << 4)  /* PB4, knob push, low = pressed */
 #define PINS   (WINMAC | KNOB_B | KNOB_A | KNOB_P)
+#define MODE   ((1u << 20) | (1u << 21))  /* mode switch: PB20 low = BT, PB21 low = 2.4G */
 
 /* Keymap slots reserved for the knob in patches.py, as (column, row). */
 #define VOL_COL   14
@@ -25,6 +26,7 @@
 #define SET_OS(mac) (0x0000050Au | (uint32_t)(mac) << 16)  /* keymap entry 0A 05 os 00 */
 
 uint32_t fw_tick(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3);
+void fw_release_keys(void);
 void fw_key_event(uint32_t col, uint32_t row, uint32_t pressed);
 void fw_special_key(uint32_t entry, uint32_t pressed);
 
@@ -50,16 +52,25 @@ void knob_init(void)
         p[i] = 0;
 }
 
-static void pullups_on(void)
+/* The firmware rewrites these registers too, from interrupts as well. */
+static uint32_t irq_off(void)
 {
     uint32_t irq;
 
-    /* The firmware rewrites these registers too, from interrupts as well. */
     __asm__ volatile("csrrc %0, 0x800, %1" : "=r"(irq) : "r"(0x88u) : "memory");
-    PB_DIR &= ~PINS;
-    PB_PD_DRV &= ~PINS;
-    PB_PU |= PINS;
+    return irq;
+}
+
+static void irq_on(uint32_t irq)
+{
     __asm__ volatile("csrs 0x800, %0" : : "r"(irq & 0x88u) : "memory");
+}
+
+static void pullups_on(uint32_t pins)
+{
+    PB_DIR &= ~pins;
+    PB_PD_DRV &= ~pins;
+    PB_PU |= pins;
 }
 
 static void turn(uint8_t ab)
@@ -127,7 +138,10 @@ static void poll(void)
     uint8_t ab;
 
     if ((PB_PU & PINS) != PINS || (PB_DIR & PINS) || (PB_PD_DRV & PINS)) {
-        pullups_on();
+        uint32_t irq = irq_off();
+
+        pullups_on(PINS);
+        irq_on(irq);
         st.ready = 1;
         st.t_key = now;
         return;
@@ -154,6 +168,25 @@ static void poll(void)
         fw_special_key(SET_OS(st.mac), 1);
         fw_special_key(SET_OS(st.mac), 0);
     }
+}
+
+/* Replaces the tail call that ends the firmware's sleep preparation (0x143BE), which leaves
+ * these pins as pull-up inputs: every closed knob, Win/Mac or mode-switch contact would draw
+ * pull-up current for the whole sleep. A closed contact gets a pull-down instead, so no pin
+ * conducts and none floats. After wake, 0x14566 restores the mode switch and poll() the
+ * rest. */
+void hook_sleep(void)
+{
+    uint32_t irq = irq_off(), closed;
+
+    pullups_on(PINS | MODE);
+    for (volatile int i = 0; i < 1000; i++)   /* the mode pins were driven low just before */
+        ;
+    closed = ~PB_PIN & (PINS | MODE);
+    PB_PU &= ~closed;
+    PB_PD_DRV |= closed;
+    irq_on(irq);
+    fw_release_keys();
 }
 
 /* Replaces the firmware's calls of fw_tick, made once per 1 kHz key-scan tick in every

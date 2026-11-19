@@ -37,8 +37,6 @@ static struct {
     uint32_t phase;    /* effect position, one cycle = 2^32 */
     uint16_t rtc;
     uint8_t  cycles;   /* completed cycles, for rainbow breathing */
-    uint8_t  test;     /* 0x81 / 0x82 while a test pattern shows */
-    uint8_t  a, b;     /* its side LEDs */
 } sl;
 
 /* Brightness 0-4 as the firmware's 0/25/50/75/100 %. */
@@ -47,11 +45,6 @@ static const uint8_t LEVEL[5] = {0, 64, 128, 191, 255};
 static const uint32_t RATE[5] = {16384, 23831, 32768, 52429, 87381};
 /* Off, static, breathing, spectrum, wave, snake: cycle length as a shift of RATE. */
 static const uint8_t SLOW[6] = {0, 0, 0, 2, 1, 0};
-/* Side LED chain index -> position along the sides, for wave and snake. */
-static const uint8_t SIDE_POS[SIDE_N] = {
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-    17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33,
-};
 
 /* Called from hook_call: sl lives in RAM nothing zeroes. */
 void led_init(void)
@@ -90,19 +83,10 @@ uint32_t hook_led_get(void)
     return r;
 }
 
-/* The CK75SE stores the side-light parameters but never draws them. A mode byte with bit 7
- * set selects a test pattern instead (tools/side_test.py); it isn't stored. */
 uint32_t hook_sled_set(void)
 {
     uint32_t r;
 
-    if (CMD[1] & 0x80) {
-        sl.test = CMD[1];
-        sl.a = CMD[2];
-        sl.b = CMD[3];
-        return 0;
-    }
-    sl.test = 0;
     swap_rgb_rainbow();
     r = fw_sled_set();
     swap_rgb_rainbow();
@@ -159,21 +143,9 @@ static uint32_t tri(uint32_t x)
     return x < 128 ? x * 2 : (255 - x) * 2;
 }
 
-static void side_test(uint8_t *out)
-{
-    for (unsigned i = 0; i < SIDE_N; i++, out += BYTES) {
-        if (sl.test == 0x81 && i >= sl.a && i <= sl.b)
-            put(out, 0, 0, 255, 255);
-        else if (sl.test == 0x82 && i == sl.a)
-            put(out, 255, 255, 255, 255);
-        else if (sl.test == 0x82 && i == sl.b)
-            put(out, 0, 0, 255, 255);
-        else
-            put(out, 0, 0, 0, 0);
-    }
-}
-
-/* Sharkfin's edge-light modes: 0 off, 1 static, 2 breathing, 3 spectrum, 4 wave, 5 snake. */
+/* Sharkfin's edge-light modes: 0 off, 1 static, 2 breathing, 3 spectrum, 4 wave, 5 snake.
+ * The CK75SE stores these settings but never draws them. Wave and snake follow the chain
+ * order, which runs along the sides. */
 static void side_render(uint8_t *out)
 {
     uint32_t mode = fw_side_light[0], speed = fw_side_light[1], bright = fw_side_light[2];
@@ -194,15 +166,11 @@ static void side_render(uint8_t *out)
     sl.phase += dt * (RATE[speed] >> SLOW[mode]);
     if (sl.phase < old)
         sl.cycles++;
-    if (sl.test & 0x7F) {
-        side_test(out);
-        return;
-    }
     p8 = sl.phase >> 24;
     head = (sl.phase >> 16) * SIDE_N >> 8;   /* snake head, 1/256 LED */
 
-    for (unsigned i = 0; i < SIDE_N; i++, out += BYTES) {
-        uint32_t pos = SIDE_POS[i], hue = pos * 256 / SIDE_N, level = 255, c[3];
+    for (uint32_t pos = 0; pos < SIDE_N; pos++, out += BYTES) {
+        uint32_t hue = pos * 256 / SIDE_N, level = 255, c[3];
         int32_t d;
 
         c[0] = own[0];

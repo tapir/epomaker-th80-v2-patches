@@ -24,7 +24,6 @@ FN_KEY = bytes.fromhex("0a010000")
 # which every flash makes it.
 DEFAULT_SETTINGS = 0x3D080
 
-# Fn+Esc (factory reset) stays until the final build, while the defaults still change.
 FN_KEEP = {
     0 * 6 + 0: bytes.fromhex("0a020000"),  # Fn+Esc: factory reset
     1 * 6 + 1: bytes.fromhex("0e000000"),  # Fn+1: Bluetooth device 1
@@ -130,6 +129,8 @@ PATCHES: list[Patch] = [
           "command 0x08 (set side light): through hook_sled_set"),
     Patch(0x1AA44, bytes.fromhex("eff08fed"), lambda syms: jal(0x1AA44, syms["hook_sled_get"]),
           "command 0x88 (get side light): through hook_sled_get"),
+    Patch(0x14562, bytes.fromhex("6f60c075"), lambda syms: j(0x14562, syms["hook_sleep"]),
+          "sleep preparation: end through hook_sleep (closed contacts get pull-downs)"),
     # Every caller sends the 87-LED CK75SE frame through this routine; its first instruction
     # becomes a jump, the rest is dead.
     Patch(0x1422C, bytes.fromhex("b7470040"), lambda syms: j(0x1422C, syms["hook_led_send"]),
