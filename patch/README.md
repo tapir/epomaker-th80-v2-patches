@@ -27,7 +27,8 @@ rewritten).
 | device id | identify reply `0x19D8E`/`0x19D94`: 3720 → 3573 (Sharkfin's TH80 V2 profile) |
 | Esc + L recovery | `0x1BE4C` → `hook_call` (`hooks/hook_call.c`): Esc + L held at power-up calls the stock enter-boot routine |
 | knob, Win/Mac | the 4 scan-tick calls of `0x199E8` → `hook_tick` (`hooks/knob.c`): decodes the knob into `key_event()` presses of the knob slots, sets the OS mode from PB1 |
-| lighting colours | commands `0x07`/`0x87` → `hook_led_set`/`hook_led_get` (`hooks/led.c`): swap colour modes 7 and 8 for Sharkfin's TH80 V2 profile |
+| lighting colours | commands `0x07`/`0x87`/`0x08`/`0x88` → `hook_led_set`/`_get`, `hook_sled_set`/`_get` (`hooks/led.c`): swap colour modes 7 and 8 for Sharkfin's TH80 V2 profile; an `0x08` mode byte with bit 7 set selects a side-LED test pattern instead (`tools/side_test.py`) |
+| LED chain, side lights | the DMA send `0x1422C` → `hook_led_send` (`hooks/led_send.S`, `hooks/led.c`): turns the 87-LED CK75SE frame into the TH80's 116-LED chain and draws the side lights from the `0x08` settings |
 
 ## A patch
 
@@ -44,8 +45,13 @@ Patch(0x1BE4C, bytes.fromhex("ef504fa8"), lambda syms: jal(0x1BE4C, syms["hook_c
   replaces another `jal` must keep its `rd` and target the hook blob.
 - `rv.call(src, dst)`: 8-byte `auipc ra` + `jalr ra`, reaching any address. A call pair
   that replaces another must call through `ra` and target the hook blob.
+- A `jal`/`j` written over any other instruction must target the hook blob too: that is how
+  a whole function is replaced (`0x1422C`).
 - The build prints each redirected call's original target, which the hook calls itself
   (declared in `hooks/fw.ld`).
+- A hook standing in for a whole function may clobber only the registers the original
+  does: with GCC's `-fipa-ra` the firmware's callers can keep values in the others across
+  the call. `hooks/led_send.S` saves them around its C body.
 
 ### `.highcode`: flash 0x5400-0x10EF7
 
@@ -84,6 +90,10 @@ Put `.c`/`.S` files in `patch/hooks/`. They are compiled and linked into one blo
   stay inside `0x20000150-0x200001FF`: the RAM copy of the startup's init code, the only
   RAM known to be unused once `main()` runs. Nothing zeroes it, so hooks clear their own
   state (`hook_call` calls `knob_init`).
+- Buffers too large for that window go in section `.bufram` (`__attribute__((section(".bufram")))`)
+  at `BUF_RAM` (`0x20013E00`), inside `0x20013D00-0x20015FFF`: RAM past the firmware's
+  `.bss` that only newlib's heap (24 bytes, for `rand()`) and the stack's far end could
+  reach; 8 KiB stay for the stack. Nothing zeroes it either.
 - `.data` is rejected: hooks must not need initialized RAM; use `const` or literals.
 - Firmware functions and variables are declared in `hooks/fw.ld` as
   `PROVIDE(fw_tick = 0x199E8);`, at the address where the code executes (RAM for

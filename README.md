@@ -18,8 +18,12 @@ Working with `patch/build/th80.bin`:
 - Mode switch: USB / 2.4G (stock dongle) / BT. Fn+1/2/3 picks the BT device.
 - Win/Mac switch: sets the firmware's OS mode.
 - Debounce 5 ms by default.
+- Lighting in the TH80's LED order: every effect, the battery display, Caps Lock (top LED
+  of the strip by Esc) and charging (bottom LED of the strip).
+- Side lights (34 LEDs): off, static, breathing, spectrum, wave and snake, with colour,
+  rainbow, brightness and speed.
 - Sharkfin (github.com/dniminenn/sharkfin) identifies it as a TH80 V2: keymap, knob,
-  lighting effects, colours, rainbow and brightness work.
+  lighting and edge light work.
 - Recovery without opening the case: hold Esc + L while plugging in.
 
 The Fn layers hold only Fn+1/2/3 and Fn+Esc (factory reset); everything else is meant to
@@ -71,6 +75,7 @@ USB while plugged in, so Sharkfin and the tools still reach it.
 | `tools/key_capture.py [s]` | print what the keyboard sends, over USB and the 2.4G dongle |
 | `tools/fetch_vendor_fw.py [ID]` | download a vendor image from the ROYUAN OTA server (default 3720) |
 | `tools/get_toolchain.sh` | install the toolchain into `toolchain/` |
+| `tools/side_test.py` | light chosen side LEDs, to map their positions |
 | `tools/flash_scanner.py` | flash the pin scanner |
 | `tools/scanner_cmd.py` | pin-scanner commands: status, battery ADC, LED tests, enter boot |
 | `tools/capture_pins.py` | log pin-scanner key and pin events |
@@ -97,14 +102,8 @@ USB while plugged in, so Sharkfin and the tools still reach it.
 
 ## TODO
 
-- LEDs:
-  - Per-key effects are one LED off from the number row on. The CK75SE's LED tables
-    (`0x3D4F8`, effect tables `0x3D300`/`0x3D35C`/`0x3D576`) assume its 14-key top row; the
-    TH80 order is in `re/FINDINGS.md`.
-  - Side lights (LEDs 82–115) stay dark: the CK75SE frame buffer holds 87 LEDs. Needs a
-    116-LED buffer, side-light effects, and Sharkfin's edge-light commands (`0x08`/`0x88`;
-    check the colour-mode 7/8 swap there too).
-  - Drive the CK75SE's indicator states onto the TH80 strip (LEDs 79–81).
+- Side lights: wave and snake run in wiring order, which jumps between the sides. Map the
+  physical order with `tools/side_test.py` and fill `SIDE_POS` in `patch/hooks/led.c`.
 - Remove Fn+Esc (factory reset) from the Fn layers once the defaults stop changing.
 - Sleep: the knob and Win/Mac pull-ups stay on in sleep (extra drain while a contact is
   closed); release or drive them low before sleep.

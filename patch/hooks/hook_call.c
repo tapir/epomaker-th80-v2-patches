@@ -21,6 +21,7 @@
 void fw_xt32m_tune(uint32_t value);
 void fw_enter_boot(void);
 void knob_init(void);
+void led_init(void);
 
 static void spin(uint32_t n)
 {
@@ -77,6 +78,7 @@ static int esc_l_held(void)
 void hook_call(uint32_t value)
 {
     knob_init();
+    led_init();
     fw_xt32m_tune(value);
     if (esc_l_held())
         fw_enter_boot();   /* resets into the boot; returns only if the flag write failed */

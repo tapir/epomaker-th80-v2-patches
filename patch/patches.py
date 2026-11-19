@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Callable, NamedTuple
 
-from rv import call, decode_call, jal
+from rv import call, decode_call, j, jal
 
 
 class Patch(NamedTuple):
@@ -109,10 +109,19 @@ PATCHES: list[Patch] = [
           "command 0x07 (set lighting): through hook_led_set"),
     Patch(0x1AA38, bytes.fromhex("eff00fdd"), lambda syms: jal(0x1AA38, syms["hook_led_get"]),
           "command 0x87 (get lighting): through hook_led_get"),
+    Patch(0x1AA3E, bytes.fromhex("eff06fe8"), lambda syms: jal(0x1AA3E, syms["hook_sled_set"]),
+          "command 0x08 (set side light): through hook_sled_set"),
+    Patch(0x1AA44, bytes.fromhex("eff08fed"), lambda syms: jal(0x1AA44, syms["hook_sled_get"]),
+          "command 0x88 (get side light): through hook_sled_get"),
+    # Every caller sends the 87-LED CK75SE frame through this routine; its first instruction
+    # becomes a jump, the rest is dead.
+    Patch(0x1422C, bytes.fromhex("b7470040"), lambda syms: j(0x1422C, syms["hook_led_send"]),
+          "LED DMA send: through hook_led_send (TH80 order, 116 LEDs, side lights)"),
     # Sharkfin picks the device profile by this id alone: 3573 = TH80 V2, 3720 = CK75SE.
     Patch(0x19D8E, bytes.fromhex("130780f8"), bytes.fromhex("1307500f"), "identify: dev_id low byte 0xF5 (CK75SE: 0x88)"),
     Patch(0x19D94, bytes.fromhex("3947"), bytes.fromhex("3547"), "identify: dev_id high byte 0x0D (CK75SE: 0x0E)"),
 ]
 
 HOOK_BASE = 0x3F000  # >= image end, 4-byte aligned; .text/.rodata land here
-HOOK_RAM = 0x20000180  # knob state; see HOOK_RAM_WINDOW in build.py
+HOOK_RAM = 0x20000180  # knob and side-light state; see HOOK_RAM_WINDOW in build.py
+BUF_RAM = 0x20013E00  # 116-LED frame; see BUF_RAM_WINDOW in build.py

@@ -7,5 +7,6 @@ SECTIONS
   .text HOOK_BASE : { *(.text .text.*) }
   .rodata : { *(.rodata .rodata.*) }
   .bss HOOK_RAM (NOLOAD) : { *(.bss .bss.*) *(COMMON) }
+  .bufram BUF_RAM (NOLOAD) : { *(.bufram .bufram.*) }
   /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) *(.riscv.attributes) }
 }

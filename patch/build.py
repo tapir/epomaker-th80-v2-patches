@@ -46,6 +46,10 @@ SRAM = (0x20000000, 0x20018000)
 # once before main() and is never called again. Nothing zeroes it for hooks; they clear
 # their own .bss (hook_call does).
 HOOK_RAM_WINDOW = (0x20000150, 0x20000200)
+# Large hook buffers (.bufram, never zeroed): RAM past the firmware's .bss (ends 0x20013c9f),
+# where newlib's heap starts. Only rand() mallocs, once, 24 bytes. The stack grows down from
+# 0x20018000, its deepest known frame is a 4 KiB flash-page buffer; 8 KiB stay for it.
+BUF_RAM_WINDOW = (0x20013D00, 0x20016000)
 DEFAULT_HOOK_BASE = 0x3F000
 
 # -mno-relax and -msmall-data-limit=0 keep generated code off gp, which the firmware owns.
@@ -146,6 +150,11 @@ def validate(image, patches, blob_range=(0, 0)):
         redirect = call_redirect(patch)
         new_jal = decode_jal(patch.addr, patch.new)
         calls_blob = bool(new_jal) and blob_range[0] <= new_jal[1] < blob_range[1]
+        if new_jal and not redirect and not calls_blob:
+            raise RuntimeError(
+                f"{where}: writes a jal to {new_jal[1]:#x}, outside the hook blob "
+                f"{blob_range[0]:#x}-{blob_range[1] - 1:#x}"
+            )
         if HIGHCODE[0] <= patch.addr < HIGHCODE[1]:
             if redirect or calls_blob:
                 raise RuntimeError(
@@ -197,12 +206,24 @@ def elf_symbols(elf):
     syms = {}
     for line in run(tool("nm"), "-n", elf).splitlines():
         parts = line.split()
-        if len(parts) == 3 and parts[1].isupper() and parts[2] not in ("HOOK_BASE", "HOOK_RAM"):
+        if len(parts) == 3 and parts[1].isupper() and parts[2] not in ("HOOK_BASE", "HOOK_RAM", "BUF_RAM"):
             syms[parts[2]] = int(parts[0], 16)
     return syms
 
 
-def build_hooks(hooks_dir, hook_base, hook_ram, work):
+def check_ram(name, addr, size, base, window):
+    """A hook RAM section must start at its configured base and stay inside its window."""
+    if base is None:
+        raise RuntimeError(f"hooks need {size} bytes of {name}: set its base in patch/patches.py")
+    if addr != base:
+        raise RuntimeError(f"hook {name} is at {addr:#x}, not its base {base:#x}")
+    if not window[0] <= addr or addr + size > window[1]:
+        raise RuntimeError(
+            f"hook {name} {addr:#x}-{addr + size - 1:#x} leaves {window[0]:#x}-{window[1] - 1:#x}"
+        )
+
+
+def build_hooks(hooks_dir, hook_base, hook_ram, work, buf_ram=None):
     sources = sorted([*hooks_dir.glob("*.c"), *hooks_dir.glob("*.S")])
     if not sources:
         return b"", {}
@@ -231,6 +252,7 @@ def build_hooks(hooks_dir, hook_base, hook_ram, work):
         "-Wl,--gc-sections",
         f"-Wl,--defsym=HOOK_BASE={hook_base:#x}",
         f"-Wl,--defsym=HOOK_RAM={hook_ram or 0:#x}",
+        f"-Wl,--defsym=BUF_RAM={buf_ram or 0:#x}",
         # Roots every global hook; --gc-sections still drops static helpers nobody calls.
         *[f"-Wl,--undefined={name}" for name in sorted(globals_)],
         "-o",
@@ -240,26 +262,17 @@ def build_hooks(hooks_dir, hook_base, hook_ram, work):
 
     sections = elf_sections(elf)
     for name, (_, size, flags) in sections.items():
-        if "A" in flags and size and name not in (".text", ".rodata", ".bss"):
+        if "A" in flags and size and name not in (".text", ".rodata", ".bss", ".bufram"):
             raise RuntimeError(
                 f"hook section {name} ({size} bytes) is not allowed: "
-                "hooks may only use .text, .rodata and .bss"
+                "hooks may only use .text, .rodata, .bss and .bufram"
             )
     if sections.get(".text", (0,))[0] != hook_base:
         raise RuntimeError(f"linker script did not place hook .text at {hook_base:#x}")
-    if sections.get(".bss", (0, 0))[1]:
-        bss_addr, bss_size = sections[".bss"][0], sections[".bss"][1]
-        if hook_ram is None:
-            raise RuntimeError(
-                f"hooks need {bss_size} bytes of .bss: set HOOK_RAM in patch/patches.py"
-            )
-        if bss_addr != hook_ram:
-            raise RuntimeError(f"hook .bss is at {bss_addr:#x}, not HOOK_RAM {hook_ram:#x}")
-        if hook_ram + bss_size > HOOK_RAM_WINDOW[1]:
-            raise RuntimeError(
-                f"HOOK_RAM {hook_ram:#x} plus {bss_size} B of .bss runs past "
-                f"{HOOK_RAM_WINDOW[1]:#x}, into live RAM code"
-            )
+    for name, base, window in ((".bss", hook_ram, HOOK_RAM_WINDOW), (".bufram", buf_ram, BUF_RAM_WINDOW)):
+        addr, size, _ = sections.get(name, (0, 0, ""))
+        if size:
+            check_ram(name, addr, size, base, window)
 
     blob_path = work / "hooks.bin"
     run(
@@ -435,6 +448,18 @@ def selftest():
     rejects(config.Patch(0x7830, far_site, rv_call(0x7830 + RAM_OFFSET, 0x8000), "far call outside",
                          ram_code=True), blob_range=hook_blob)
 
+    rejects(config.Patch(0x19000, image[0x19000:0x19004], jal(0x19000, 0x8000), "hookify outside"),
+            blob_range=hook_blob)
+
+    check_ram(".bufram", 0x20013E00, 0xAE0, 0x20013E00, BUF_RAM_WINDOW)
+    for addr, size, base in [(0x20013E00, 0xAE0, None), (0x20013E04, 0xAE0, 0x20013E00),
+                             (0x20013C00, 0x10, 0x20013C00), (0x20015F00, 0x200, 0x20015F00)]:
+        try:
+            check_ram(".bufram", addr, size, base, BUF_RAM_WINDOW)
+        except RuntimeError:
+            continue
+        raise RuntimeError(f"check_ram accepted {addr:#x}+{size:#x} (base {base})")
+
     stray = bytearray(image)
     stray[0x8000] ^= 0xFF
     rejects_output(bytes(stray))
@@ -450,6 +475,7 @@ def main(argv):
     config = load_config()
     hook_base = getattr(config, "HOOK_BASE", DEFAULT_HOOK_BASE)
     hook_ram = getattr(config, "HOOK_RAM", None)
+    buf_ram = getattr(config, "BUF_RAM", None)
     if hook_base < len(image) or hook_base % 4:
         raise RuntimeError(
             f"HOOK_BASE {hook_base:#x} must be >= the image end ({len(image):#x}) "
@@ -464,7 +490,7 @@ def main(argv):
 
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
-        blob, syms = build_hooks(HOOKS_DIR, hook_base, hook_ram, work)
+        blob, syms = build_hooks(HOOKS_DIR, hook_base, hook_ram, work, buf_ram)
         blob_range = (hook_base, hook_base + len(blob))
         if blob_range[1] > APP_END:
             raise RuntimeError(f"hook blob ends at {blob_range[1]:#x}, past {APP_END:#x}")

@@ -8,3 +8,7 @@ PROVIDE(fw_key_event = 0x20004DEC); /* (column, row, pressed): flash 0x9FEC, run
 PROVIDE(fw_special_key = 0x200040B6); /* (keymap entry, pressed) for type 0x0A: flash 0x92B6 */
 PROVIDE(fw_led_set = 0x19F74);     /* feature command 0x07: store lighting params of a mode */
 PROVIDE(fw_led_get = 0x1A008);     /* feature command 0x87: report them */
+PROVIDE(fw_sled_set = 0x1A0C4);    /* feature command 0x08: store the side-light params */
+PROVIDE(fw_sled_get = 0x1A11C);    /* feature command 0x88: report them */
+PROVIDE(fw_led_frame = 0x2000E8E0); /* 87 LEDs x 24 SPI bytes, CK75SE order; DMA source */
+PROVIDE(fw_side_light = 0x2000D37D); /* settings +0x0D: side light mode..B, as sent by 0x08 */

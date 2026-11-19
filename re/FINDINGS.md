@@ -119,9 +119,10 @@ PA = pins 0–15, PB = pins 0–23.
 
 ## App protocol (interface 2, usage page `0xFFFF` usage 2)
 
-64-byte feature reports, report ID 0. **Byte 7 = `~(byte0 + … + byte6) & 0xFF`**; without it
-the firmware ignores the packet and the kernel returns the previous buffer, which looks
-like an echo. Commands (dispatcher `0x1A900`, jump tables `0x3D6A4` for `0x02–0x11` and
+64-byte feature reports, report ID 0. **Byte 7 = `~(byte0 + … + byte6) & 0xFF`**, except for
+`07` and `08`, whose 7 parameters push it to byte 8 (`0x19CEE`); without it the firmware
+ignores the packet and the kernel returns the previous buffer, which looks like an echo.
+Commands (dispatcher `0x1A900`, jump tables `0x3D6A4` for `0x02–0x11` and
 `0x3D5E4` for `0x7F–0xAE`; command and reply share RAM `0x2000F108`):
 
 | command | handler | |
@@ -130,7 +131,7 @@ like an echo. Commands (dispatcher `0x1A900`, jump tables `0x3D6A4` for `0x02–
 | `7F 55 AA 55 AA` | `0x19C74` | enter the vendor boot |
 | `06 ms` / `86` | `0x19F4C` / `0x19F66` | debounce set / get (reply byte 1) |
 | `07 mode speed bright flags R G B` / `87` | `0x19F74` / `0x1A008` | lighting of one mode |
-| `08` / `88` | `0x1A0C4` / … | side light |
+| `08 mode speed bright flags R G B` / `88` | `0x1A0C4` / `0x1A11C` | side light |
 | `0A` / `8A` | | keymap write / read (`[profile, 0xFF, page, 0]`, 8 × 64 B) |
 | `10` / `90` | | Fn layer write / read (`[os, profile, 0xFF, page]`) |
 | `04` / `84` | | profile set / get |
@@ -155,6 +156,9 @@ like an echo. Commands (dispatcher `0x1A900`, jump tables `0x3D6A4` for `0x02–
   The image ends at `0x3EB70`; the boot accepts up to `0x60000`.
 - RAM `0x20000150–0x200001FF` (the RAM copy of the init code) is unreferenced after
   startup.
+- From `0x20013CA0` (end of `.bss`) newlib's heap grows toward the stack (`_sbrk`
+  `0x12136`); only `rand()` mallocs, once, 24 bytes. The stack starts at `0x20018000`; its
+  deepest known frames are 4 KiB flash-page buffers (`0x1334C`, `0x13952`).
 - main = `0x1BDF4`; SetSysClock `0x11E1E` runs first. `0x1BE4C` (`jal 0x110D0` with
   `a0 = 4`) is the first call after the clock setup.
 - Enter boot `0x19C74`: erase, write, verify `0x55AA55AA` at `0x4000` (≤1000 tries), erase
@@ -165,7 +169,8 @@ like an echo. Commands (dispatcher `0x1A900`, jump tables `0x3D6A4` for `0x02–
 ### Settings
 
 240-byte block at RAM `gp+0x688` (`0x2000D370`): +4 halfword bits 1–2 = OS mode (0 Win,
-1 Mac), +8 = current lighting mode, +9 = debounce, per-mode lighting at +0x22 (speed),
+1 Mac), +8 = current lighting mode, +9 = debounce, +0x0D–0x13 side light (command `08`),
+per-mode lighting at +0x22 (speed),
 +0x42 (brightness), +0x62 (flags), +0x82 (RGB, 3 bytes per mode). Loaded from code flash
 `0x60000` (`0x13B24`); when that page is blank (every enter-boot erases it), the defaults at
 `0x3D080` are copied in (`0x13AA8`) and saved. The live base keymap is at RAM `gp+0x488`.
@@ -207,9 +212,21 @@ arguments.
 
 ### Lighting
 
-- WS2812 over SPI0 (`0x40004000`): encoder `0x7C80` (RAM code) expands each LED's 24 bits
-  to 24 SPI bytes (1 = `0xF0`, 0 = `0xC0`); DMA send `0x1422C`; frame buffer RAM
-  `0x2000E8E0`, 87 LEDs (2088 B).
+- WS2812 over SPI0 (`0x40004000`, PA14), one SPI byte per bit (1 = `0xF0`, 0 = `0xC0`),
+  24 per LED in G R B order. Every 8 ms (event `0x80`) the effects render into frame A (RAM
+  `0x2000E0B8`, 87 LEDs = 2088 B), `0x196D0` adds the indicators and copies A to frame B
+  (`0x2000E8E0`), and the mode loop calls the DMA send `0x1422C(B, 2088)`, which returns
+  at once while the previous frame is still going out.
+- LED writers (RAM code; index, brightness %, R, G, B): `0x7C74` key LEDs 0–79 into A, and
+  copies LED 76 (space bar) onto 83–86; `0x7D9C` any LED into A, 5× dimmer (indicators);
+  `0x7E72` into B (factory LED test `0x7F52`). Colour transform:
+  `sum = G·255/400 + R + B/2`, `R' = R²·250 / (sum·255)`, `G' = G²·250 / (sum·400)`,
+  `B' = B²·250 / (sum·510)`, then × brightness / 100; it caps the current of mixed colours.
+  Brightness levels 0–4 = 0/25/50/75/100 % (RAM `0x2000C638`).
+- CK75SE chain: 0–79 keys, 80 Caps Lock (white), 81 unused, 82 charging (`0x1947A`, which
+  also shows the battery level on keys 1–0), 83–86 space-bar underglow. Its top row has 14
+  LEDs (LED 13 = its 14th key, where the TH80 has the knob), so from LED 14 on, the TH80
+  chain is one LED earlier, indicators included.
 - `0x3D3FC`: matrix (row, column) → layout position (row, x), 6 × 21 byte pairs, `ff ff` =
   no key; row 0 skips x1 (the indicator strip). `0x3D4F8`: layout (row, x) → LED index,
   6 × 21 bytes; serpentine from Esc over 80 key LEDs. The CK75SE's top row has 14 keys
@@ -219,7 +236,22 @@ arguments.
   Flags: low nibble = colour mode (0–6 preset colour, **7 own RGB, 8 rainbow**), high
   nibble = option. `0x13828`/`0x13BA4` load the current mode into the effect engine (RAM
   `0x2000D54C`: +0x1E colour mode, +0x32 option, +0x23 speed + 1); the effects
-  (`0x14800–0x18E00`) test the colour mode.
+  (`0x14800–0x18E00`) test the colour mode. Dispatch: render table `0x3D1AC` (mode − 1,
+  modes 1–24), key-press reactions `0x3D170` (mode − 5).
+- Command `0x08` stores its 7 parameters at settings +0x0D (defaults `04 03 04 08 ff ff ff`:
+  wave, speed 3, brightness 4, rainbow) and `0x88` reports them; nothing else reads them.
+
+### Names
+
+- USB strings (RAM-code handler at `0x68E0` sends each descriptor's own bLength): 1
+  manufacturer `0x3B18C` (6 spaces), 2 product `0x3B15C` ("CK75SE Gaming Keyboard", room
+  for 23 characters), 3 serial `0x3B144` ("0123456789").
+- BLE: `0xC8C8` copies "CK75SE 5.0" (`0x3D6F4`, length 10 set at `0xC8D2`) into the
+  29-byte name buffer RAM `0x2000C40C` (initialised to "ROYUAN KEYBOARD"). It becomes the
+  GAP device name (`0x1B716`) and the scan response (`0xC9BC`, up to 29 characters); the
+  advertising data (`0xC902`: template `0x3D700` = flags, keyboard appearance, HID UUID,
+  Microsoft Swift Pair) carries it only up to 11 characters.
+- The 2.4G dongle (`3151:5052`) reports its own strings.
 
 ### Timers and loops
 
@@ -237,8 +269,10 @@ main while the mode lasts. The loops call flash `0x199E8` once per scan tick, fr
   board's keymap, so every TH80 key value must appear exactly once. The knob is three
   keys: `03 00 EA 00` (Vol−), `03 00 E2 00` (Mute), `03 00 E9 00` (Vol+).
 - Its TH80 V2 profile (taken from the vendor app, so presumably the original firmware's
-  convention) sends the colour modes 7 and 8 swapped relative to this firmware; the
-  CK75SE profile matches it.
+  convention) sends the colour modes 7 and 8 swapped relative to this firmware, for the
+  lighting and the edge light alike; the CK75SE profile matches it.
+- Edge light (`08`): modes 0 off, 1 static, 2 breathing, 3 spectrum, 4 wave, 5 snake;
+  speed 0–4 is sent as shown (not inverted like the lighting's), brightness 0–4.
 - It never flashes firmware.
 
 ## Pin scanner (`re/scanner/`)
