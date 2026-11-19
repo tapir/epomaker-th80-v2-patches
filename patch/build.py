@@ -12,7 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from rv import MATTR, OBJDUMP, decode_call, decode_jal, disassemble, jal, run, tool
+from rv import MATTR, OBJDUMP, decode_call, decode_jal, decode_la, disassemble, jal, la, run, tool
 from rv import call as rv_call
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -114,6 +114,14 @@ def far_call_redirect(patch):
     return (old, new) if old and new else None
 
 
+def address_redirect(patch):
+    """(rd, old address), (rd, new address) when the patch replaces one auipc+addi address load
+    with another, both decoded where the code executes."""
+    old = decode_la(exec_addr(patch.addr), patch.old)
+    new = decode_la(exec_addr(patch.addr), patch.new)
+    return (old, new) if old and new else None
+
+
 def call_redirect(patch):
     """(rd, old target), (rd, new target) when the patch replaces one jal with another."""
     old = decode_jal(patch.addr, patch.old)
@@ -185,6 +193,16 @@ def validate(image, patches, blob_range=(0, 0)):
             if not blob_range[0] <= new_target < blob_range[1]:
                 raise RuntimeError(
                     f"{where}: new far-call target {new_target:#x} is outside the hook blob "
+                    f"{blob_range[0]:#x}-{blob_range[1] - 1:#x}"
+                )
+        address = address_redirect(patch)
+        if address:
+            (old_rd, _), (new_rd, new_target) = address
+            if old_rd != new_rd:
+                raise RuntimeError(f"{where}: address load rd={old_rd} -> rd={new_rd}")
+            if not blob_range[0] <= new_target < blob_range[1]:
+                raise RuntimeError(
+                    f"{where}: new address {new_target:#x} is outside the hook blob "
                     f"{blob_range[0]:#x}-{blob_range[1] - 1:#x}"
                 )
     return sorted(patches, key=lambda p: p.addr)
@@ -362,6 +380,10 @@ def summarise(out, patches, blob, hook_base, regions):
         if far:
             (_, old_target), (_, new_target) = far
             print(f"    call at {exec_addr(patch.addr):#x}: {old_target:#x} -> {new_target:#x}")
+        address = address_redirect(patch)
+        if address:
+            (rd, old_target), (_, new_target) = address
+            print(f"    address x{rd} at {exec_addr(patch.addr):#x}: {old_target:#x} -> {new_target:#x}")
     if blob:
         print(f"hooks    {hook_base:#07x}-{hook_base + len(blob) - 1:#07x}  {len(blob)} bytes")
     print(f"changed  {len(regions)} range(s)")
@@ -439,6 +461,16 @@ def selftest():
     ram_call = config.Patch(0x8000, image[0x8000:0x8004], jal(0x8000, 0x3F004), "call in RAM code")
     rejects(ram_call, blob_range=hook_blob)
 
+    la_site = image[0xC8EC:0xC8F4]  # RAM code loading the BLE name address
+    la_new = la(0xC8EC + RAM_OFFSET, 0x3F004, 11)
+    validate(image, [config.Patch(0xC8EC, la_site, la_new, "address", ram_code=True)], hook_blob)
+    rejects(config.Patch(0xC8EC, la_site, la(0xC8EC + RAM_OFFSET, 0x3F004, 10), "address rd",
+                         ram_code=True), blob_range=hook_blob)
+    rejects(config.Patch(0xC8EC, la_site, la(0xC8EC + RAM_OFFSET, 0x8000, 11), "address outside",
+                         ram_code=True), blob_range=hook_blob)
+    rejects(config.Patch(0xC8EC, la_site, la(0xC8EC, 0x3F004, 11), "address at the flash address",
+                         ram_code=True), blob_range=hook_blob)
+
     far_site = image[0x7830:0x7838]  # RAM code calling flash 0x199e8 with auipc+jalr
     far_new = rv_call(0x7830 + RAM_OFFSET, 0x3F004)
     validate(image, [config.Patch(0x7830, far_site, far_new, "far call", ram_code=True)], hook_blob)
@@ -494,6 +526,12 @@ def main(argv):
         blob_range = (hook_base, hook_base + len(blob))
         if blob_range[1] > APP_END:
             raise RuntimeError(f"hook blob ends at {blob_range[1]:#x}, past {APP_END:#x}")
+        for name, data in getattr(config, "BLOB_DATA", {}).items():
+            if name not in syms:
+                raise RuntimeError(f"BLOB_DATA: no hook symbol {name}")
+            at = syms[name] - hook_base
+            if blob[at : at + len(data)] != data:
+                raise RuntimeError(f"hook symbol {name} holds {blob[at : at + len(data)]!r}, not {data!r}")
         patches = validate(image, resolve(config.PATCHES, syms), blob_range)
         out = assemble(image, patches, blob, hook_base)
         if len(out) > APP_END:

@@ -1,4 +1,5 @@
-"""RISC-V RV32 encoders (jal, auipc+jalr call) for firmware patches, plus raw-bytes disassembly."""
+"""RISC-V RV32 encoders (jal, auipc+jalr call, auipc+addi address) for firmware patches, plus
+raw-bytes disassembly."""
 
 import re
 import struct
@@ -106,6 +107,28 @@ def decode_call(src, code):
     return (jalr >> 7) & 0x1F, (src + (auipc & 0xFFFFF000) + lo) & 0xFFFFFFFF
 
 
+def la(src, dst, rd):
+    """8-byte `auipc rd, hi` + `addi rd, rd, lo` at `src` loading the address `dst`."""
+    offset = (dst - src) & 0xFFFFFFFF
+    hi = ((offset + 0x800) >> 12) & 0xFFFFF
+    lo = (offset - (hi << 12)) & 0xFFF
+    return struct.pack("<II", hi << 12 | rd << 7 | 0x17, lo << 20 | rd << 15 | rd << 7 | 0x13)
+
+
+def decode_la(src, code):
+    """(rd, address) for an 8-byte `auipc rd` + `addi rd, rd, imm` placed at `src`, or None."""
+    if len(code) != 8:
+        return None
+    auipc, addi = struct.unpack("<II", code)
+    rd = (auipc >> 7) & 0x1F
+    if auipc & 0x7F != 0x17 or addi & 0x707F != 0x13 or (addi >> 15) & 0x1F != rd or (addi >> 7) & 0x1F != rd:
+        return None
+    lo = addi >> 20
+    if lo & 0x800:
+        lo -= 0x1000
+    return rd, (src + (auipc & 0xFFFFF000) + lo) & 0xFFFFFFFF
+
+
 LINE = re.compile(r"^\s*([0-9a-f]+):\s+[0-9a-f]+\s+(\S+)\s*(.*)$")
 
 CASES = [
@@ -172,8 +195,24 @@ def selftest():
     stock = bytes.fromhex("977001e0e780803b")  # firmware's call of 0x199e8 at RAM 0x20002630
     if decode_call(0x20002630, stock) != (1, 0x199E8):
         raise RuntimeError(f"decode_call misreads the stock call: {decode_call(0x20002630, stock)}")
-    print(f"rv selftest OK: {len(CASES)} jal encodings and {len(CALLS)} calls decoded correctly, "
-          f"{len(REJECTED)} rejected")
+    for src, dst in CALLS:
+        code = la(src, dst, 11)
+        if decode_la(src, code) != (11, dst) or decode_call(src, code) is not None:
+            raise RuntimeError(f"la {src:#x} -> {dst:#x} decodes as {decode_la(src, code)}")
+        dis = disassemble(src, code)
+        lines = [m for m in map(LINE.match, dis.splitlines()) if m]
+        if [m.group(2) for m in lines] not in (["auipc", "addi"], ["auipc", "mv"]):
+            raise RuntimeError(f"la {src:#x} -> {dst:#x} disassembles as:\n{dis}")
+        hi = int(re.search(r"0x([0-9a-f]+)", lines[0].group(3)).group(1), 16)
+        lo = re.search(r"a1, a1(?:, (-?0x[0-9a-f]+))?$", lines[1].group(3).strip())
+        lo = lo and int(lo.group(1) or "0", 16)  # llvm prints a zero offset as `mv a1, a1`
+        if lo is None or (src + (hi << 12) + lo) & 0xFFFFFFFF != dst:
+            raise RuntimeError(f"llvm-objdump reads la {src:#x} -> {dst:#x} differently:\n{dis}")
+    stock = bytes.fromhex("976503e093858500")  # the BLE name address at RAM 0x200076ec
+    if decode_la(0x200076EC, stock) != (11, 0x3D6F4):
+        raise RuntimeError(f"decode_la misreads the stock load: {decode_la(0x200076EC, stock)}")
+    print(f"rv selftest OK: {len(CASES)} jal encodings, {len(CALLS)} calls and {len(CALLS)} address "
+          f"loads decoded correctly, {len(REJECTED)} rejected")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Callable, NamedTuple
 
-from rv import call, decode_call, j, jal
+from rv import call, decode_call, j, jal, la
 
 
 class Patch(NamedTuple):
@@ -58,6 +58,23 @@ def tick_call(site):
         raise RuntimeError(f"{site:#x}: {old.hex()} is not a call of {TICK:#x}")
     return Patch(site, old, lambda syms: call(site + RAM_OFFSET, syms["hook_tick"]),
                  f"key-scan tick: call hook_tick instead of {TICK:#x}", ram_code=True)
+
+
+NAME = "EPOMAKER TH80 V2"
+BLOB_DATA = {"hook_ble_name": NAME.encode()}  # build.py checks the hook string matches
+USB_PRODUCT = 0x3B15C  # string descriptor 2; the firmware sends its own bLength bytes
+BLE_NAME_COPY = 0xC8C8  # copies the name into the BLE name buffer (RAM code)
+
+
+def usb_string(text, size=None):
+    desc = bytes([2 + 2 * len(text), 3]) + text.encode("utf-16-le")
+    return desc + bytes((size or len(desc)) - len(desc))
+
+
+def c_li_a5(value):
+    """2-byte `c.li a5, value`, -32..31."""
+    imm = value & 0x3F
+    return (0x4001 | (imm >> 5) << 12 | 15 << 7 | (imm & 0x1F) << 2).to_bytes(2, "little")
 
 
 def key(usage):
@@ -117,6 +134,15 @@ PATCHES: list[Patch] = [
     # becomes a jump, the rest is dead.
     Patch(0x1422C, bytes.fromhex("b7470040"), lambda syms: j(0x1422C, syms["hook_led_send"]),
           "LED DMA send: through hook_led_send (TH80 order, 116 LEDs, side lights)"),
+    Patch(USB_PRODUCT, usb_string("CK75SE Gaming Keyboard"),
+          usb_string(NAME, len(usb_string("CK75SE Gaming Keyboard"))), f"USB product name: {NAME}"),
+    Patch(BLE_NAME_COPY + 0x0A, c_li_a5(10), c_li_a5(len(NAME)), f"BLE name length: {len(NAME)}",
+          ram_code=True),
+    # Too long for the old string's place; past 11 characters the firmware sends the name in
+    # the scan response only, not in the advertising data.
+    Patch(BLE_NAME_COPY + 0x24, bytes.fromhex("976503e093858500"),  # la a1, 0x3d6f4
+          lambda syms: la(BLE_NAME_COPY + 0x24 + RAM_OFFSET, syms["hook_ble_name"], 11),
+          f"BLE name: {NAME} (CK75SE: CK75SE 5.0)", ram_code=True),
     # Sharkfin picks the device profile by this id alone: 3573 = TH80 V2, 3720 = CK75SE.
     Patch(0x19D8E, bytes.fromhex("130780f8"), bytes.fromhex("1307500f"), "identify: dev_id low byte 0xF5 (CK75SE: 0x88)"),
     Patch(0x19D94, bytes.fromhex("3947"), bytes.fromhex("3547"), "identify: dev_id high byte 0x0D (CK75SE: 0x0E)"),

@@ -15,7 +15,9 @@ Working with `patch/build/th80.bin`:
   (swapped by choice).
 - Knob: clockwise / counter-clockwise = Volume Up / Down, press = Mute, over USB, 2.4G and
   BT. They are keymap slots, so they remap like keys.
-- Mode switch: USB / 2.4G (stock dongle) / BT. Fn+1/2/3 picks the BT device.
+- Mode switch: USB / 2.4G (stock dongle) / BT. Fn+1/2/3 picks the BT device; holding it
+  pairs a new one.
+- Name: "EPOMAKER TH80 V2" over USB and in Bluetooth pairing lists.
 - Win/Mac switch: sets the firmware's OS mode.
 - Debounce 5 ms by default.
 - Lighting in the TH80's LED order: every effect, the battery display, Caps Lock (top LED
@@ -97,7 +99,7 @@ USB while plugged in, so Sharkfin and the tools still reach it.
 - MCU: **WCH CH584M** (marked `RY6602`), QingKe RISC-V3C, 448 KiB flash, 96 KiB RAM, BLE,
   2.4G and USB full speed. Read-out and debug are locked.
 - Original firmware: `ry6602_fq_ak_x159e_3m_1k_1k`, device id 3573, v1.05, USB `3151:5056`.
-  The patched firmware reports id 3573 and v1.07 but keeps the CK75SE USB strings.
+  The patched firmware reports id 3573 and v1.07.
 - Pin map, LED chain, protocols and firmware internals: `re/FINDINGS.md`.
 
 ## TODO
@@ -107,7 +109,5 @@ USB while plugged in, so Sharkfin and the tools still reach it.
 - Remove Fn+Esc (factory reset) from the Fn layers once the defaults stop changing.
 - Sleep: the knob and Win/Mac pull-ups stay on in sleep (extra drain while a contact is
   closed); release or drive them low before sleep.
-- Untested: pairing a new BT host (long press Fn+1/2/3).
-- USB product string still says "CK75SE Gaming Keyboard".
 - Final test: every key, the knob and the switches in USB / 2.4G / BT; battery level;
   sleep and wake.

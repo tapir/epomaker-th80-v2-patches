@@ -25,6 +25,7 @@ rewritten).
 | debounce | default settings `0x3D080` + 9: 1 → 5 ms |
 | mode switch | the 20 PB1/PB2 pin arguments → PB20/PB21 |
 | device id | identify reply `0x19D8E`/`0x19D94`: 3720 → 3573 (Sharkfin's TH80 V2 profile) |
+| names | USB product string `0x3B15C` in place; the BLE name copy at `0xC8C8` loads `hook_ble_name` (`hooks/names.c`) with its length: "EPOMAKER TH80 V2" |
 | Esc + L recovery | `0x1BE4C` → `hook_call` (`hooks/hook_call.c`): Esc + L held at power-up calls the stock enter-boot routine |
 | knob, Win/Mac | the 4 scan-tick calls of `0x199E8` → `hook_tick` (`hooks/knob.c`): decodes the knob into `key_event()` presses of the knob slots, sets the OS mode from PB1 |
 | lighting colours | commands `0x07`/`0x87`/`0x08`/`0x88` → `hook_led_set`/`_get`, `hook_sled_set`/`_get` (`hooks/led.c`): swap colour modes 7 and 8 for Sharkfin's TH80 V2 profile; an `0x08` mode byte with bit 7 set selects a side-LED test pattern instead (`tools/side_test.py`) |
@@ -45,6 +46,9 @@ Patch(0x1BE4C, bytes.fromhex("ef504fa8"), lambda syms: jal(0x1BE4C, syms["hook_c
   replaces another `jal` must keep its `rd` and target the hook blob.
 - `rv.call(src, dst)`: 8-byte `auipc ra` + `jalr ra`, reaching any address. A call pair
   that replaces another must call through `ra` and target the hook blob.
+- `rv.la(src, dst, rd)`: 8-byte `auipc rd` + `addi rd`, an address load. One that replaces
+  another must keep `rd` and point into the hook blob. `BLOB_DATA` in `patches.py` lists
+  hook symbols whose bytes the build checks, for data that patches size elsewhere.
 - A `jal`/`j` written over any other instruction must target the hook blob too: that is how
   a whole function is replaced (`0x1422C`).
 - The build prints each redirected call's original target, which the hook calls itself
@@ -60,8 +64,8 @@ The startup copies this block to RAM and executes it there (RAM address = flash 
 
 - a `jal` redirect there is refused: built from the flash address it would land on
   garbage, and from RAM a `jal` can't reach the flash hook blob anyway;
-- an `auipc`+`jalr` redirect is allowed when encoded at the RAM address
-  (`call(site + 0x1FFFAE00, …)`); the build decodes both calls there;
+- an `auipc`+`jalr` redirect or `auipc`+`addi` address load is allowed when encoded at
+  the RAM address (`call(site + 0x1FFFAE00, …)`); the build decodes both there;
 - every patch in the region needs `ram_code=True`, stating that its address arithmetic
   accounts for the relocation;
 - `review.dis` disassembles these regions at their RAM address and labels both.
