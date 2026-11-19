@@ -13,6 +13,7 @@ QUERIES = [
     ("debounce", 0x86),    # [1] = ms
     ("lighting", 0x87),    # mode speed brightness flags R G B
     ("side light", 0x88),
+    ("sleep", 0x91),       # [8..15] = sleep BT, sleep 2.4G, deep BT, deep 2.4G: seconds, u16 LE
 ]
 
 
@@ -33,7 +34,7 @@ def main():
     dev = hid.device()
     dev.open_path(path)
     for name, op in QUERIES:
-        print(f"{name:10s} {query(dev, op)[:12].hex(' ')}")
+        print(f"{name:10s} {query(dev, op)[:16].hex(' ')}")
     r = query(dev, 0x8F)
     dev.close()
     print(f"dev_id {int.from_bytes(r[1:5], 'little')}, firmware v{r[8]}.{r[7]:02d}")

@@ -13,7 +13,7 @@ RV64, which turns `c.jal` into `c.addiw` and hides calls.
   flash, 32 KiB data flash, 96 KiB SRAM, BLE + 2.4G + USB full speed. Evidence: platform
   images carry the build tag `CH584M 1KKB 1M` and the WCH BLE stack `CH585_BLE_LIB_V1.4.9`,
   and contain this board's HID descriptors; marking photo `evidence/u2-ry6602-marking.png`
-  (FCC exhibit, internal view 4). PCB silkscreen `RY6602-3M-AKCB-V0.1-20251218`.
+  (FCC exhibit, internal view 4). PCB silkscreen `RY6602-3M-ARGB-V0.1-20251218`.
 - `wchisp info`: `CH584[0x8416]`, BTVER 02.30, UID `E8-F5-1E-5E-3D-0C-43-60`,
   `CFG_ROM_READ=0` (no read-out), `CFG_DEBUG_EN=0` (no 2-wire debug), `CFG_BOOT_EN=1`,
   `CFG_RESET_EN=0`, `DOWNLOAD_CFG=PB22`. The original firmware can't be dumped.
@@ -58,13 +58,13 @@ Outputs and sensing:
 - PA14 = WS2812 data (SPI0 MOSI, default pin mapping); chain order below.
 - PA15 = LED power, high = on; alone it powers every LED. The CK75SE also switches PB19
   with it (`0x7926` on, `0x79D8` off); PB19 alone has no visible effect.
-- PA4 = battery sense (ADC channel 0): ~1.03 V with the switch on BT, ~0 on USB. CK75SE
+- PA4 = battery sense (ADC channel 0): ~1.03 V with the switch on BT, ~0.32 V on USB. CK75SE
   routine `0x6CB0` (11-sample median).
 - PB0 = low while USB power is present (USB detect or charger status). CK75SE checks it at
   `0x6D8E`, `0x7984`.
 - USB D-/D+ = PB10/PB11; J2 = PB22. PB18 is a pull-up input the CK75SE reads (purpose
-  unknown); PB5, PB12, PB13, PB23 are unused by it. None of these has a function found on
-  the TH80.
+  unknown); PB5, PB12, PB13 and PB23 only get pull-ups before sleep. None of these has a
+  function found on the TH80.
 
 ### LED chain (PA14, 116 LEDs)
 
@@ -131,6 +131,7 @@ Commands (dispatcher `0x1A900`, jump tables `0x3D6A4` for `0x02–0x11` and
 | `06 ms` / `86` | `0x19F4C` / `0x19F66` | debounce set / get (reply byte 1) |
 | `07 mode speed bright flags R G B` / `87` | `0x19F74` / `0x1A008` | lighting of one mode |
 | `08 mode speed bright flags R G B` / `88` | `0x1A0C4` / `0x1A11C` | side light |
+| `11` / `91` | | sleep timers: reply bytes 8–15 = sleep BT, sleep 2.4G, deep BT, deep 2.4G (s, u16 LE; defaults 120, 120, 1680, 1680) |
 | `0A` / `8A` | | keymap write / read (`[profile, 0xFF, page, 0]`, 8 × 64 B) |
 | `10` / `90` | | Fn layer write / read (`[os, profile, 0xFF, page]`) |
 | `04` / `84` | | profile set / get |
@@ -195,7 +196,7 @@ Connection mode: data flash `0x6000` (16 bytes, `0x1B41A`), RAM `0x200104AC`.
   `0xCDC8` (port, pin), pin mode `0xCCF4` (port, pin, mode 0 in / 1 out 5 mA / 2 out 20 mA,
   pull 0 none / 1 down / 2 up), `0xCDE4`.
 
-### Mode switch
+### Mode switch and sleep
 
 The CK75SE reads a 3-position switch on PB1 (low = BT) and PB2 (low = 2.4G), both high =
 USB: the same scheme as the TH80's PB20/PB21. On the TH80, PB1 is the Win/Mac switch and
@@ -232,9 +233,7 @@ arguments.
   chain is one LED earlier, indicators included.
 - `0x3D3FC`: matrix (row, column) → layout position (row, x), 6 × 21 byte pairs, `ff ff` =
   no key; row 0 skips x1 (the indicator strip). `0x3D4F8`: layout (row, x) → LED index,
-  6 × 21 bytes; serpentine from Esc over 80 key LEDs. The CK75SE's top row has 14 keys
-  (TH80: 13), so its table is one LED off for the TH80 from the number row on.
-  `0x3D300`, `0x3D35C`, `0x3D576`: effect order/group tables over LED indices.
+  6 × 21 bytes; serpentine from Esc over 80 key LEDs. `0x3D300`, `0x3D35C`, `0x3D576`: effect order/group tables over LED indices.
 - Command `0x07` stores mode, speed, brightness, flags and RGB per mode in the settings.
   Flags: low nibble = colour mode (0–6 preset colour, **7 own RGB, 8 rainbow**), high
   nibble = option. `0x13828`/`0x13BA4` load the current mode into the effect engine (RAM
@@ -268,9 +267,12 @@ main while the mode lasts. The loops call flash `0x199E8` once per scan tick, fr
 
 - Picks the device record by the dev id from `0x8F` alone. 3573 = TH80 V2 (layout
   `Common79_TH80V2`, knob, side light, 3 profiles); 3720 = CK75SE.
-- TH80 V2 keys have no fixed slots: Sharkfin finds each key by its factory entry in the
-  board's keymap, so every TH80 key value must appear exactly once. The knob is three
-  keys: `03 00 EA 00` (Vol−), `03 00 E2 00` (Mute), `03 00 E9 00` (Vol+).
+- TH80 V2 keys have no fixed slots: its picture `Common79_TH80V2` lists each key's factory
+  entry, and the Keys page finds it in the board's keymap, so every TH80 key value must
+  appear exactly once (all 82 do, the knob's three included: `03 00 EA 00` Vol−,
+  `03 00 E2 00` Mute, `03 00 E9 00` Vol+). The owner's "Looks right" is kept per browser
+  (localStorage `sharkfin.layout-confirmed.3573`); without it the page falls back to
+  numbered slots.
 - Its TH80 V2 profile (taken from the vendor app, so presumably the original firmware's
   convention) sends the colour modes 7 and 8 swapped relative to this firmware, for the
   lighting and the edge light alike; the CK75SE profile matches it.

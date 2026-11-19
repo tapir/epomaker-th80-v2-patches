@@ -9,7 +9,7 @@ there.
 
 ## Status
 
-Working with `patch/build/th80.bin`:
+Tested over USB, 2.4G and BT with `patch/build/th80.bin`:
 
 - All 79 keys in the TH80 layout. Left Win acts as Fn and the key right of R-Alt as Win
   (swapped by choice).
@@ -26,11 +26,15 @@ Working with `patch/build/th80.bin`:
 - Side lights (34 LEDs): off, static, breathing, spectrum, wave and snake, with colour,
   rainbow, brightness and speed.
 - Sharkfin (github.com/dniminenn/sharkfin) identifies it as a TH80 V2: keymap, knob,
-  lighting and edge light work.
+  lighting and edge light work. In a new browser, confirm its picture once on the Keys page
+  (Picture ▾ → Try another picture → Looks right).
 - Recovery without opening the case: hold Esc + L while plugging in.
 
 The Fn layers hold only Fn+1/2/3 and Fn+Esc (factory reset); everything else is meant to
-be mapped in Sharkfin. Not done yet: [TODO](#todo).
+be mapped in Sharkfin.
+
+Limits: the 2.4G dongle reports its own USB name, and the middle LED of the strip stays
+dark (the CK75SE has no third indicator).
 
 ## Build
 
@@ -74,7 +78,7 @@ USB while plugged in, so Sharkfin and the tools still reach it.
 |---|---|
 | `tools/enter_boot.py` | keyboard → vendor boot (`7F 55 AA 55 AA`) |
 | `tools/flash_boot.py IMAGE` | flash through the vendor boot (sends `image[0x5000:]`) |
-| `tools/probe.py` | read-only: device id, firmware version, profile, debounce, lighting |
+| `tools/probe.py` | read-only: device id, firmware version, profile, debounce, lighting, side light, sleep timers |
 | `tools/key_capture.py [s]` | print what the keyboard sends, over USB and the 2.4G dongle |
 | `tools/fetch_vendor_fw.py [ID]` | download a vendor image from the ROYUAN OTA server (default 3720) |
 | `tools/get_toolchain.sh` | install the toolchain into `toolchain/` |
@@ -101,8 +105,3 @@ USB while plugged in, so Sharkfin and the tools still reach it.
 - Original firmware: `ry6602_fq_ak_x159e_3m_1k_1k`, device id 3573, v1.05, USB `3151:5056`.
   The patched firmware reports id 3573 and v1.07.
 - Pin map, LED chain, protocols and firmware internals: `re/FINDINGS.md`.
-
-## TODO
-
-- Final test: every key, the knob and the switches in USB / 2.4G / BT; battery level;
-  sleep and wake.
