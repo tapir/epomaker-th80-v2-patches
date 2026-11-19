@@ -1,11 +1,10 @@
 # Epomaker TH80 V2: patched CK75SE firmware
 
-The TH80 V2's own firmware is gone from this board: the vendor bootloader erases the app
-before every flash, the chip's read-out is locked, and Epomaker never published a TH80 V2
-(device id 3573) image. This repository turns the published firmware of a sibling board
+Epomaker never published a TH80 V2 (device id 3573) image. This repository turns the published firmware of a sibling board
 on the same ROYUAN `ry6602` / WCH CH584M platform, the COOLKILLER CK75SE (`3720_v107`),
-into firmware for the TH80 V2 by binary patching, and keeps the tools and notes that got
-there.
+into firmware for the TH80 V2 by binary patching, and keeps the tools and notes that got there.
+
+I recommend Sharkfin (github.com/dniminenn/sharkfin) for editing the settings instead of Epomaker hub/driver.
 
 ## Status
 
